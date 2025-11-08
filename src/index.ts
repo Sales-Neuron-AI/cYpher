@@ -60,8 +60,15 @@ class CustomMoonwardAgent extends Agent {
 
     console.log(`Received task: ${action.task.description}`);
     
-    // We need the OpenServ API key for our manual calls
-    const openServKey = this.apiKey;
+    // --- THIS IS THE FIX ---
+    // We read the key from the environment, not from 'this.apiKey'
+    const openServKey = process.env.OPENSERV_API_KEY;
+    if (!openServKey) {
+      console.error('CRITICAL ERROR: OPENSERV_API_KEY is not set.');
+      // We can't report the error to OpenServ if we don't have its key.
+      return; 
+    }
+    
     const headers = { 'x-openserv-key': openServKey };
 
     try {
@@ -77,23 +84,18 @@ class CustomMoonwardAgent extends Agent {
         signals: results    // 'results' is the array []
       };
       
-      // --- THIS IS THE FIX ---
-      // We will manually call the OpenServ "complete" endpoint
-      const completeUrl = `${OPENSERV_API_URL}/workspaces/${action.workspace.id}/tasks/${action.task.id}/complete`;
-      
-      const data = {
-        outputOptionId: outputOptionId,
-        output: formattedOutput
+      const params: any = {
+        workspaceId: action.workspace.id,
+        taskId: action.task.id,
+        outputOptionId: outputOptionId, 
+        output: formattedOutput         
       };
 
-      console.log('Manually completing task by calling OpenServ API...');
-      await axios.put(completeUrl, data, { headers });
-      
+      await this.completeTask(params);
+
       console.log('Task completed successfully.');
 
     } catch (error) {
-      console.error('Task failed:', error);
-      
       // Manually mark the task as "errored"
       const errorUrl = `${OPENSERV_API_URL}/workspaces/${action.workspace.id}/tasks/${action.task.id}/error`;
       await axios.post(errorUrl, {
