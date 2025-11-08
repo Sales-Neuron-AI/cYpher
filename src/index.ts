@@ -19,7 +19,7 @@ agent.addCapability({
   description: 'Fetches active trading signals from the Moonward API and adds a fixed position_size (1000) and leverage (10) to each signal.',
   // This tool takes no input, so the schema is empty
   schema: z.object({}), 
-
+  
   async run({ action }) {
     const apiKey = process.env.MOONWARD_API_KEY;
     if (!apiKey) {
@@ -32,7 +32,7 @@ agent.addCapability({
       console.log('Fetching active signals from Moonward...');
       const response = await axios.get(MOONWARD_API_URL, {
         headers: { 'x-api-key': apiKey },
-        [cite_start]params: { 'include_expired': false } // Get active signals only [cite: 21, 26]
+        params: { 'include_expired': false } // Get active signals only
       });
 
       const signals = response.data.data || [];
@@ -41,7 +41,7 @@ agent.addCapability({
         console.log('No active signals found.');
         return []; // Return an empty array if no signals
       }
-
+      
       console.log(`Fetched ${signals.length} active signal(s).`);
 
       // B. This is your custom logic:
@@ -49,7 +49,7 @@ agent.addCapability({
       const formattedSignals = signals.map(signal => {
         // Add your custom fields to the signal object
         return {
-          [cite_start]...signal, // Keep all original signal data [cite: 31-45]
+          ...signal, // Keep all original signal data
           position_size: 1000,
           leverage: 10
         };
