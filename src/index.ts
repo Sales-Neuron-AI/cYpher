@@ -1,4 +1,5 @@
-import { Agent, doTaskActionSchema } from '@openserv-labs/sdk';
+// FIX 1: Removed 'doTaskActionSchema' from the import
+import { Agent } from '@openserv-labs/sdk';
 import { z } from 'zod';
 import axios from 'axios';
 import 'dotenv/config';
@@ -10,7 +11,8 @@ const MOONWARD_API_URL = 'https://api.moonward.net/api/v1/signals';
 class CustomMoonwardAgent extends Agent {
 
   // 2. This is our main function, now private to this class
-  private async runFetchAndFormat(action: z.infer<typeof doTaskActionSchema>) {
+  // We removed 'z.infer<typeof doTaskActionSchema>' since it's not needed here
+  private async runFetchAndFormat(action: any) { 
     const apiKey = process.env.MOONWARD_API_KEY;
     if (!apiKey) {
       throw new Error('Agent is not configured with Moonward API key.');
@@ -53,21 +55,20 @@ class CustomMoonwardAgent extends Agent {
   }
 
   // 3. This is the "override" that fixes our problem.
-  // We are forcing the SDK to run our code.
-  protected async doTask(action: z.infer<typeof doTaskActionSchema>) {
+  // FIX 1: We changed the type of 'action' to 'any'
+  protected async doTask(action: any) {
     if (!action.task) return;
 
+    // This is OUR log message, so we'll know it's working
     console.log(`Received task: ${action.task.description}`);
-    
-    // We check if this is the task we care about
-    // (We'll just assume any task given to this agent is the fetch task)
     
     try {
       // Run our private fetch function
       const results = await this.runFetchAndFormat(action);
       
       // Manually mark the task as "done" and send the results
-      await this.markTaskAsCompleted({
+      // FIX 2: Renamed 'markTaskAsCompleted' to 'completeTask'
+      await this.completeTask({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
         output: results
@@ -77,6 +78,7 @@ class CustomMoonwardAgent extends Agent {
 
     } catch (error) {
       // Manually mark the task as "errored"
+      // This function was correct, so we leave it
       await this.markTaskAsErrored({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
