@@ -46,7 +46,8 @@ agent.addCapability({
 
       // B. This is your custom logic:
       // Loop through each signal and add your fixed parameters
-      const formattedSignals = signals.map(signal => {
+      // FIX IS HERE: We added '(signal: any)' to be specific
+      const formattedSignals = signals.map((signal: any) => {
         // Add your custom fields to the signal object
         return {
           ...signal, // Keep all original signal data
