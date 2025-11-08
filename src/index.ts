@@ -69,22 +69,22 @@ class CustomMoonwardAgent extends Agent {
       // Run our private fetch function
       const results = await this.runFetchAndFormat(action);
       
-      // --- THIS IS THE FIX ---
-      
-      // 1. Get the required outputOptionId from the task data
+      // Get the required outputOptionId from the task data
       const outputOptionId = Object.keys(action.task.outputOptions)[0];
 
-      // 2. Format the output as an object, as requested by the error
+      // Format the output as an object
       const formattedOutput = {
         signals: results // 'results' is the array []
       };
       
-      // 3. Manually mark the task as "done" with the new, correct data
+      // Manually mark the task as "done" with the new, correct data
       await this.completeTask({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
-        outputOptionId: outputOptionId, // 1. Added the ID
-        output: formattedOutput        // 2. Send the object
+        outputOptionId: outputOptionId,
+        // --- THIS IS THE FIX ---
+        // We must send the output as a JSON string
+        output: JSON.stringify(formattedOutput)
       });
 
       console.log('Task completed successfully.');
