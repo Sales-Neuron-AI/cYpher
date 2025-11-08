@@ -22,6 +22,7 @@ class CustomMoonwardAgent extends Agent {
     console.log(`Found API key in environment. Key length: ${apiKey.length}`);
 
     try {
+      // A. Make the API call to Moonward
       console.log('Fetching active signals from Moonward...');
       const response = await axios.get(MOONWARD_API_URL, {
         headers: { 'x-api-key': apiKey },
@@ -37,12 +38,14 @@ class CustomMoonwardAgent extends Agent {
       
       console.log(`Fetched ${signals.length} active signal(s).`);
 
+      // B. Your custom logic
       const formattedSignals = signals.map((signal: any) => ({
         ...signal,
         position_size: 1000,
         leverage: 10
       }));
 
+      // C. Return the new, modified array
       return formattedSignals;
 
     } catch (error) {
@@ -60,15 +63,12 @@ class CustomMoonwardAgent extends Agent {
 
     console.log(`Received task: ${action.task.description}`);
     
-    // --- THIS IS THE FIX ---
-    // We read the key from the environment, not from 'this.apiKey'
+    // Read the OpenServ key from the environment
     const openServKey = process.env.OPENSERV_API_KEY;
     if (!openServKey) {
       console.error('CRITICAL ERROR: OPENSERV_API_KEY is not set.');
-      // We can't report the error to OpenServ if we don't have its key.
       return; 
     }
-    
     const headers = { 'x-openserv-key': openServKey };
 
     try {
@@ -81,16 +81,19 @@ class CustomMoonwardAgent extends Agent {
       // Format the output as an object, as the API requires
       const formattedOutput = {
         type: 'structured', // Added the 'type' field
-        signals: results    // 'results' is the array []
+        signals: results    // 'results' is the array [] or [signal]
       };
       
+      // We are forcing the type to 'any' to bypass the SDK's incorrect "grammar"
+      // and send the correct data to the API.
       const params: any = {
         workspaceId: action.workspace.id,
         taskId: action.task.id,
-        outputOptionId: outputOptionId, 
-        output: formattedOutput         
+        outputOptionId: outputOptionId, // The API needs this
+        output: formattedOutput         // The API needs this specific object
       };
 
+      // Manually complete the task using the correct parameters
       await this.completeTask(params);
 
       console.log('Task completed successfully.');
