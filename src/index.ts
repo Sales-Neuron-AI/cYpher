@@ -5,6 +5,8 @@ import 'dotenv/config';
 
 // Define the Moonward API URL
 const MOONWARD_API_URL = 'https://api.moonward.net/api/v1/signals';
+// Define the OpenServ API base URL
+const OPENSERV_API_URL = 'https://api.openserv.ai';
 
 // 1. We create a new "Custom Agent" class
 class CustomMoonwardAgent extends Agent {
@@ -13,18 +15,13 @@ class CustomMoonwardAgent extends Agent {
   private async runFetchAndFormat(action: any) { 
     const apiKey = process.env.MOONWARD_API_KEY;
 
-    // --- DEBUGGING LOGS ---
     if (!apiKey) {
       console.error('CRITICAL ERROR: The MOONWARD_API_KEY variable was not found in process.env. It is undefined or null.');
       throw new Error('Agent is not configured with Moonward API key.');
     }
     console.log(`Found API key in environment. Key length: ${apiKey.length}`);
-    console.log(`Key starts with: '${apiKey.substring(0, 5)}...'`);
-    console.log(`Key ends with: '...${apiKey.substring(apiKey.length - 5)}'`);
-    // --- END DEBUGGING LOGS ---
 
     try {
-      // A. Make the API call to Moonward
       console.log('Fetching active signals from Moonward...');
       const response = await axios.get(MOONWARD_API_URL, {
         headers: { 'x-api-key': apiKey },
@@ -40,14 +37,12 @@ class CustomMoonwardAgent extends Agent {
       
       console.log(`Fetched ${signals.length} active signal(s).`);
 
-      // B. Your custom logic
       const formattedSignals = signals.map((signal: any) => ({
         ...signal,
         position_size: 1000,
         leverage: 10
       }));
 
-      // C. Return the new, modified array
       return formattedSignals;
 
     } catch (error) {
@@ -65,6 +60,10 @@ class CustomMoonwardAgent extends Agent {
 
     console.log(`Received task: ${action.task.description}`);
     
+    // We need the OpenServ API key for our manual calls
+    const openServKey = this.apiKey;
+    const headers = { 'x-openserv-key': openServKey };
+
     try {
       // Run our private fetch function
       const results = await this.runFetchAndFormat(action);
@@ -78,28 +77,28 @@ class CustomMoonwardAgent extends Agent {
         signals: results    // 'results' is the array []
       };
       
-      // --- THIS IS THE FINAL FIX ---
-      // We are forcing the type to 'any' to bypass the SDK's incorrect "grammar"
-      // and send the correct data to the API.
-      const params: any = {
-        workspaceId: action.workspace.id,
-        taskId: action.task.id,
-        outputOptionId: outputOptionId, // The API needs this
-        output: formattedOutput         // The API needs this specific object
+      // --- THIS IS THE FIX ---
+      // We will manually call the OpenServ "complete" endpoint
+      const completeUrl = `${OPENSERV_API_URL}/workspaces/${action.workspace.id}/tasks/${action.task.id}/complete`;
+      
+      const data = {
+        outputOptionId: outputOptionId,
+        output: formattedOutput
       };
 
-      await this.completeTask(params);
-
+      console.log('Manually completing task by calling OpenServ API...');
+      await axios.put(completeUrl, data, { headers });
+      
       console.log('Task completed successfully.');
 
     } catch (error) {
-      // Manually mark the task as "errored"
-      await this.markTaskAsErrored({
-        workspaceId: action.workspace.id,
-        taskId: action.task.id,
-        error: error instanceof Error ? error.message : 'An unknown error occurred.'
-      });
       console.error('Task failed:', error);
+      
+      // Manually mark the task as "errored"
+      const errorUrl = `${OPENSERV_API_URL}/workspaces/${action.workspace.id}/tasks/${action.task.id}/error`;
+      await axios.post(errorUrl, {
+        error: error instanceof Error ? error.message : 'An unknown error occurred.'
+      }, { headers });
     }
   }
 }
