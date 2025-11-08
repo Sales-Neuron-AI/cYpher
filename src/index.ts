@@ -1,29 +1,18 @@
-import { Agent } from '@openserv-labs/sdk';
+import { Agent, doTaskActionSchema } from '@openserv-labs/sdk';
 import { z } from 'zod';
 import axios from 'axios';
 import 'dotenv/config';
 
-// 1. Initialize the Agent
-const agent = new Agent({
-  systemPrompt: 'You are a trading signal agent. Your job is to fetch signals from the Moonward API and format them.',
-  apiKey: process.env.OPENSERV_API_KEY,
-  port: Number(process.env.PORT) || 7378
-});
-
-// 2. Define the Moonward API URL
+// Define the Moonward API URL
 const MOONWARD_API_URL = 'https://api.moonward.net/api/v1/signals';
 
-// 3. Add the single "Capability" (Tool)
-agent.addCapability({
-  name: 'fetchAndFormatSignals',
-  description: 'Fetches active trading signals from the Moonward API and adds a fixed position_size (1000) and leverage (10) to each signal.',
-  // This tool takes no input, so the schema is empty
-  schema: z.object({}), 
-  
-  async run({ action }) {
+// 1. We create a new "Custom Agent" class
+class CustomMoonwardAgent extends Agent {
+
+  // 2. This is our main function, now private to this class
+  private async runFetchAndFormat(action: z.infer<typeof doTaskActionSchema>) {
     const apiKey = process.env.MOONWARD_API_KEY;
     if (!apiKey) {
-      console.error('MOONWARD_API_KEY is not set.');
       throw new Error('Agent is not configured with Moonward API key.');
     }
 
@@ -32,44 +21,77 @@ agent.addCapability({
       console.log('Fetching active signals from Moonward...');
       const response = await axios.get(MOONWARD_API_URL, {
         headers: { 'x-api-key': apiKey },
-        params: { 'include_expired': false } // Get active signals only
+        params: { 'include_expired': false }
       });
 
       const signals = response.data.data || [];
 
       if (signals.length === 0) {
         console.log('No active signals found.');
-        return []; // Return an empty array if no signals
+        return [];
       }
       
       console.log(`Fetched ${signals.length} active signal(s).`);
 
-      // B. This is your custom logic:
-      // Loop through each signal and add your fixed parameters
-      // FIX IS HERE: We added '(signal: any)' to be specific
-      const formattedSignals = signals.map((signal: any) => {
-        // Add your custom fields to the signal object
-        return {
-          ...signal, // Keep all original signal data
-          position_size: 1000,
-          leverage: 10
-        };
-      });
+      // B. Your custom logic
+      const formattedSignals = signals.map((signal: any) => ({
+        ...signal,
+        position_size: 1000,
+        leverage: 10
+      }));
 
       // C. Return the new, modified array
       return formattedSignals;
 
     } catch (error) {
       console.error('Error fetching signals from Moonward:', error);
-      // Safely report the error back to OpenServ
       if (axios.isAxiosError(error) && error.response) {
-        console.error('Error details:', error.response.data);
         throw new Error(`Moonward API Error: ${error.response.status} - ${error.response.data.message || error.response.statusText}`);
       }
       throw new Error('An unexpected error occurred while fetching signals.');
     }
   }
+
+  // 3. This is the "override" that fixes our problem.
+  // We are forcing the SDK to run our code.
+  protected async doTask(action: z.infer<typeof doTaskActionSchema>) {
+    if (!action.task) return;
+
+    console.log(`Received task: ${action.task.description}`);
+    
+    // We check if this is the task we care about
+    // (We'll just assume any task given to this agent is the fetch task)
+    
+    try {
+      // Run our private fetch function
+      const results = await this.runFetchAndFormat(action);
+      
+      // Manually mark the task as "done" and send the results
+      await this.markTaskAsCompleted({
+        workspaceId: action.workspace.id,
+        taskId: action.task.id,
+        output: results
+      });
+
+      console.log('Task completed successfully.');
+
+    } catch (error) {
+      // Manually mark the task as "errored"
+      await this.markTaskAsErrored({
+        workspaceId: action.workspace.id,
+        taskId: action.task.id,
+        error: error instanceof Error ? error.message : 'An unknown error occurred.'
+      });
+      console.error('Task failed:', error);
+    }
+  }
+}
+
+// 4. Initialize and Start our new Custom Agent
+const agent = new CustomMoonwardAgent({
+  systemPrompt: 'You are a trading signal agent.',
+  apiKey: process.env.OPENSERV_API_KEY,
+  port: Number(process.env.PORT) || 7378
 });
 
-// 4. Start the Server
 agent.start();
