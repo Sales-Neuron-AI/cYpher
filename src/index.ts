@@ -63,13 +63,15 @@ class CustomMoonwardAgent extends Agent {
 
     console.log(`Received task: ${action.task.description}`);
     
-    // Read the OpenServ key from the environment
+    // Get the OpenServ key from the environment
     const openServKey = process.env.OPENSERV_API_KEY;
     if (!openServKey) {
       console.error('CRITICAL ERROR: OPENSERV_API_KEY is not set.');
       return; 
     }
-    const headers = { 'x-openserv-key': openServKey };
+    
+    // Set the headers for our manual API call
+    const openServHeaders = { 'x-openserv-key': openServKey };
 
     try {
       // Run our private fetch function
@@ -79,31 +81,34 @@ class CustomMoonwardAgent extends Agent {
       const outputOptionId = Object.keys(action.task.outputOptions)[0];
 
       // Format the output as an object, as the API requires
-      const formattedOutput = {
-        type: 'structured', // Added the 'type' field
-        signals: results    // 'results' is the array [] or [signal]
+      const outputPayload = {
+        type: 'structured', 
+        signals: results
       };
       
-      // We are forcing the type to 'any' to bypass the SDK's incorrect "grammar"
-      // and send the correct data to the API.
-      const params: any = {
-        workspaceId: action.workspace.id,
-        taskId: action.task.id,
-        outputOptionId: outputOptionId, // The API needs this
-        output: formattedOutput         // The API needs this specific object
+      // --- THIS IS THE FIX ---
+      // We will manually call the OpenServ "complete" endpoint
+      // This bypasses the broken SDK 'completeTask' function
+      const completeUrl = `${OPENSERV_API_URL}/workspaces/${action.workspace.id}/tasks/${action.task.id}/complete`;
+      
+      const dataToOpenServ = {
+        outputOptionId: outputOptionId,
+        output: outputPayload
       };
 
-      // Manually complete the task using the correct parameters
-      await this.completeTask(params);
-
+      console.log('Manually completing task by calling OpenServ API...');
+      await axios.put(completeUrl, dataToOpenServ, { headers: openServHeaders });
+      
       console.log('Task completed successfully.');
 
     } catch (error) {
+      console.error('Task failed:', error);
+      
       // Manually mark the task as "errored"
       const errorUrl = `${OPENSERV_API_URL}/workspaces/${action.workspace.id}/tasks/${action.task.id}/error`;
       await axios.post(errorUrl, {
         error: error instanceof Error ? error.message : 'An unknown error occurred.'
-      }, { headers });
+      }, { headers: openServHeaders });
     }
   }
 }
