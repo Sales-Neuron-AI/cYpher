@@ -13,13 +13,11 @@ class CustomMoonwardAgent extends Agent {
   private async runFetchAndFormat(action: any) { 
     const apiKey = process.env.MOONWARD_API_KEY;
 
-    // --- NEW DEBUGGING LOGS ---
-    // This will tell us exactly what the agent sees.
+    // --- DEBUGGING LOGS ---
     if (!apiKey) {
       console.error('CRITICAL ERROR: The MOONWARD_API_KEY variable was not found in process.env. It is undefined or null.');
       throw new Error('Agent is not configured with Moonward API key.');
     }
-    
     console.log(`Found API key in environment. Key length: ${apiKey.length}`);
     console.log(`Key starts with: '${apiKey.substring(0, 5)}...'`);
     console.log(`Key ends with: '...${apiKey.substring(apiKey.length - 5)}'`);
@@ -61,22 +59,32 @@ class CustomMoonwardAgent extends Agent {
     }
   }
 
-  // 3. This is the "override" that fixes our problem.
+  // 3. This is the "override"
   protected async doTask(action: any) {
     if (!action.task) return;
 
-    // This is OUR log message, so we'll know it's working
     console.log(`Received task: ${action.task.description}`);
     
     try {
       // Run our private fetch function
       const results = await this.runFetchAndFormat(action);
       
-      // Manually mark the task as "done" and send the results
+      // --- THIS IS THE FIX ---
+      
+      // 1. Get the required outputOptionId from the task data
+      const outputOptionId = Object.keys(action.task.outputOptions)[0];
+
+      // 2. Format the output as an object, as requested by the error
+      const formattedOutput = {
+        signals: results // 'results' is the array []
+      };
+      
+      // 3. Manually mark the task as "done" with the new, correct data
       await this.completeTask({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
-        output: results
+        outputOptionId: outputOptionId, // 1. Added the ID
+        output: formattedOutput        // 2. Send the object
       });
 
       console.log('Task completed successfully.');
