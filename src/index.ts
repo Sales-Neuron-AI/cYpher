@@ -72,19 +72,20 @@ class CustomMoonwardAgent extends Agent {
       // Get the required outputOptionId from the task data
       const outputOptionId = Object.keys(action.task.outputOptions)[0];
 
-      // Format the output as an object, as the API requires
+      // --- THIS IS THE FIX ---
+      // The API error says it expects an object with a 'type' field.
       const formattedOutput = {
-        signals: results // 'results' is the array []
+        type: 'structured', // 1. Added the 'type' field
+        signals: results    // 2. Kept our signals data
       };
       
-      // --- THIS IS THE FINAL FIX ---
       // We are forcing the type to 'any' to bypass the SDK's incorrect "grammar"
       // and send the correct data to the API.
       const params: any = {
         workspaceId: action.workspace.id,
         taskId: action.task.id,
         outputOptionId: outputOptionId, // The API needs this
-        output: formattedOutput         // The API needs an object, not a string
+        output: formattedOutput         // The API needs this specific object
       };
 
       await this.completeTask(params);
