@@ -1,4 +1,3 @@
-// FIX 1: Removed 'doTaskActionSchema' from the import
 import { Agent } from '@openserv-labs/sdk';
 import { z } from 'zod';
 import axios from 'axios';
@@ -11,12 +10,20 @@ const MOONWARD_API_URL = 'https://api.moonward.net/api/v1/signals';
 class CustomMoonwardAgent extends Agent {
 
   // 2. This is our main function, now private to this class
-  // We removed 'z.infer<typeof doTaskActionSchema>' since it's not needed here
   private async runFetchAndFormat(action: any) { 
     const apiKey = process.env.MOONWARD_API_KEY;
+
+    // --- NEW DEBUGGING LOGS ---
+    // This will tell us exactly what the agent sees.
     if (!apiKey) {
+      console.error('CRITICAL ERROR: The MOONWARD_API_KEY variable was not found in process.env. It is undefined or null.');
       throw new Error('Agent is not configured with Moonward API key.');
     }
+    
+    console.log(`Found API key in environment. Key length: ${apiKey.length}`);
+    console.log(`Key starts with: '${apiKey.substring(0, 5)}...'`);
+    console.log(`Key ends with: '...${apiKey.substring(apiKey.length - 5)}'`);
+    // --- END DEBUGGING LOGS ---
 
     try {
       // A. Make the API call to Moonward
@@ -55,7 +62,6 @@ class CustomMoonwardAgent extends Agent {
   }
 
   // 3. This is the "override" that fixes our problem.
-  // FIX 1: We changed the type of 'action' to 'any'
   protected async doTask(action: any) {
     if (!action.task) return;
 
@@ -67,7 +73,6 @@ class CustomMoonwardAgent extends Agent {
       const results = await this.runFetchAndFormat(action);
       
       // Manually mark the task as "done" and send the results
-      // FIX 2: Renamed 'markTaskAsCompleted' to 'completeTask'
       await this.completeTask({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
@@ -78,7 +83,6 @@ class CustomMoonwardAgent extends Agent {
 
     } catch (error) {
       // Manually mark the task as "errored"
-      // This function was correct, so we leave it
       await this.markTaskAsErrored({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
